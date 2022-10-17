@@ -2,18 +2,19 @@
   import { setContext } from "svelte";
   import { queryStore } from "@urql/svelte";
   import { BigNumber, Contract } from "ethers";
+  // import { saleBuysQuery } from "./sale-queries";
   import { LayerCake, Svg, Html } from "layercake";
   import { formatUnits } from "ethers/src.ts/utils";
-  import AxisX from "src/components/charts/AxisX.svelte";
-  import AxisY from "src/components/charts/AxisY.svelte";
-  import Line from "src/components/charts/Line.svelte";
-  import Scatter from "src/components/charts/Scatter.svelte";
-  import SharedTooltip from "src/components/charts/SharedTooltip.svelte";
+  import AxisX from "$components/charts/AxisX.svelte";
+  import AxisY from "$components/charts/AxisY.svelte";
+  import Line from "$components/charts/Line.svelte";
+  import Scatter from "$components/charts/Scatter.svelte";
+  import SharedTooltip from "$components/charts/SharedTooltip.svelte";
   import { timeFormat } from "d3-time-format";
-  import { formatAddress } from "src/utils";
+  import { formatAddress } from "$src/utils";
   import { writable } from "svelte/store";
-  import IconLibrary from "src/components/IconLibrary.svelte";
-  import { client } from "src/stores";
+  import IconLibrary from "$components/IconLibrary.svelte";
+  import { client } from "$src/stores";
 
   export let saleContract: Contract;
   export let reserve, token;
@@ -31,11 +32,13 @@
 
   const formatTickX = timeFormat("%b. %e. %X");
 
-  let saleContractAddress = saleContract ? saleContract.address.toLowerCase() : undefined;
+  let saleContractAddress = saleContract
+    ? saleContract.address.toLowerCase()
+    : undefined;
 
   $: saleBuysQuery = queryStore({
-      client: $client,
-      query: `
+    client: $client,
+    query: `
         query ($saleContractAddress: Bytes!) {
           saleBuys (where: {saleContractAddress: $saleContractAddress, refunded: false}, orderBy: timestamp, orderDirection: asc) {
             id
@@ -56,23 +59,21 @@
             }
           }
         }`,
-      variables: { saleContractAddress },
-      requestPolicy: "network-only"
-    }
-  );
+    variables: { saleContractAddress },
+    requestPolicy: "network-only",
+  });
 
-  const refresh = async() => {
-    if (!$saleBuysQuery.fetching) {
-      temp = saleContractAddress;
-      saleContractAddress = undefined;
-      if (await !$saleBuysQuery.fetching) {
-        saleContractAddress = temp;
-      }
+  const refresh = async () => {
+    temp = saleContractAddress;
+    saleContractAddress = undefined;
+    if (await !$saleBuysQuery.fetching) {
+      saleContractAddress = temp;
     }
   };
 
   // mapping data from the subgraph query into a format for the chart
-  $: {if ($saleBuysQuery?.data?.saleBuys.length) {
+  $: {
+    if ($saleBuysQuery?.data?.saleBuys.length) {
       const _data = $saleBuysQuery.data.saleBuys.map((buy) => {
         return {
           timestamp: buy.timestamp * 1000,
@@ -101,7 +102,7 @@
       dataset = _dataset;
       data = _data;
     }
-  };
+  }
 </script>
 
 <div class="flex w-full flex-col gap-y-4">

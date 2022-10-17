@@ -1,20 +1,19 @@
 <script lang="ts" type="module">
   import { signer, signerAddress } from "svelte-ethers-store";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Input from "../../components/Input.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
   import { addressValidate } from "../../validation";
-  import Select from "../../components/Select.svelte";
-  import ContractDeploy from "src/components/ContractDeploy.svelte";
-  import { CombineTier, CombineTierGenerator } from "rain-sdk";
-  import { isTier, selectLteLogic, selectLteMode } from "../../utils";
-  import HumanReadable from "../../components/FriendlySource/HumanReadable.svelte";
+  import Select from "$components/Select.svelte";
+  import ContractDeploy from "$components/ContractDeploy.svelte";
+  import { CombineTier, CombineTierGenerator, VM } from "rain-sdk";
+  import { selectLteLogic, selectLteMode, validateFields } from "../../utils";
+  import HumanReadable from "$components/FriendlySource/HumanReadable.svelte";
 
-  let tierContractOne: string = "0x6ba1fadb694e806c316337143241dd6cfebd5033",
-    tierContractTwo: string = "0xb2b600aeae9bc1efd68ae209e621b7546393ef28",
+  let tierContractOne: string = "0x43F76B029c9BD72A37367DA5c0323f078A86f0b2",
+    tierContractTwo: string = "0x12e418D854E8250c8e3778d5Cb00453FA1475B8f",
     deployPromise: any;
-
-  let tierOneError, tierTwoError;
+  let fields: any = {};
 
   const logicOptions = [
     { value: selectLteLogic.every, label: "Every" },
@@ -37,28 +36,29 @@
     modeValue: modeValue ? modeValue.value : selectLteMode.min,
   };
 
-  $: if (tierContractOne) {
-    (async () => {
-      tierOneError = await isTier(tierContractOne, $signer, $signerAddress);
-    })();
-  }
-
-  $: if (tierContractTwo) {
-    (async () => {
-      tierTwoError = await isTier(tierContractTwo, $signer, $signerAddress);
-    })();
-  }
-
   const deployCombineTier = async () => {
-    const combineTierConfig = new CombineTierGenerator(
-      tierContractOne
-    ).combineWith(tierContractTwo, logicValue.value, modeValue.value);
-    const newCombineTier = await CombineTier.deploy($signer, combineTierConfig);
+    const combineTierConfig = new CombineTierGenerator(tierContractOne, {
+      delegatedReport: true,
+      hasReportForSingleTier: true,
+    }).combineWith(
+      tierContractTwo,
+      logicValue.value,
+      modeValue.value,
+      true,
+      true
+    );
+    console.log(combineTierConfig);
+    const newCombineTier = await CombineTier.deploy($signer, {
+      combinedTiersLength: 0,
+      sourceConfig: combineTierConfig,
+    });
 
     return newCombineTier;
   };
 
-  const handleClick = () => {
+  const handleClick = async () => {
+    const { validationResult } = await validateFields(fields);
+    if (!validationResult) return;
     deployPromise = deployCombineTier();
   };
 </script>
@@ -78,7 +78,7 @@
         placeholder="Tier address"
         bind:value={tierContractOne}
         validator={addressValidate}
-        errorMsg={tierOneError?.errorMsg}
+        bind:this={fields.tierContractOne}
       >
         <span slot="label">Tier contract #1</span>
       </Input>
@@ -88,7 +88,7 @@
         placeholder="Tier address"
         bind:value={tierContractTwo}
         validator={addressValidate}
-        errorMsg={tierTwoError?.errorMsg}
+        bind:this={fields.tierContractTwo}
       >
         <span slot="label">Tier contract #2</span>
       </Input>
@@ -118,12 +118,7 @@
     </FormPanel>
     <FormPanel>
       {#if !deployPromise}
-        <Button
-          shrink
-          on:click={handleClick}
-          disabled={tierOneError?.errorMsg || tierTwoError?.errorMsg}
-          >Deploy CombineTier</Button
-        >
+        <Button shrink on:click={handleClick}>Deploy CombineTier</Button>
       {:else}
         <ContractDeploy {deployPromise} type="CombineTier" />
       {/if}
@@ -151,5 +146,8 @@
     position: sticky;
     top: 90px;
     padding: 5px;
+  }
+  .text {
+    white-space: break-spaces;
   }
 </style>

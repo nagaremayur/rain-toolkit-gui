@@ -1,7 +1,7 @@
 import { BigNumber, ethers } from "ethers";
 import type { BytesLike } from "ethers";
 import { concat, Hexable, hexlify, zeroPad } from "ethers/lib/utils";
-import { ERC20, ITier } from "rain-sdk";
+import { ERC20, ITierV2 } from "rain-sdk";
 
 export const getNewChildFromReceipt = (receipt, parentContract) => {
   return ethers.utils.defaultAbiCoder.decode(
@@ -159,7 +159,7 @@ export enum selectLteMode {
 }
 
 export const getERC20 = async (erc20Address, signer, signerAddress) => {
-  let errorMsg,
+  let erc20AddressError,
     erc20Contract,
     erc20name,
     erc20symbol,
@@ -168,7 +168,7 @@ export const getERC20 = async (erc20Address, signer, signerAddress) => {
     erc20totalSupply;
 
   if (ethers.utils.isAddress(erc20Address)) {
-    errorMsg = null;
+    erc20AddressError = null;
     erc20Contract = new ERC20(erc20Address, signer);
     try {
       erc20name = await erc20Contract.name();
@@ -182,24 +182,25 @@ export const getERC20 = async (erc20Address, signer, signerAddress) => {
         erc20symbol,
         erc20balance,
         erc20decimals,
-        errorMsg,
+        erc20AddressError,
         erc20totalSupply,
       };
     } catch (error) {
-      return errorMsg = "not a valid ERC20 token address";
+      erc20AddressError = "not a valid ERC20 token address";
     }
   } else {
-    return errorMsg = "not a valid address";
+    erc20AddressError = "not a valid address";
   }
 };
 
-export const validateFields = (fields: any[]) => {
+export const validateFields = async (fields: any[]) => {
+
   let fieldValues: any = {};
-  const validations = Object.keys(fields).map((key) => {
-    const validationResult = fields[key].validate();
+  const validations = await Promise.all(Object.keys(fields).map(async (key) => {
+    const validationResult = await fields[key].validate();
     fieldValues[key] = validationResult.value;
     return validationResult;
-  });
+  }));
   return {
     validationResult: validations.every((validation) => validation.ok),
     fieldValues,
@@ -255,8 +256,8 @@ export const isTier = async (tierAddress, signer, signerAddress) => {
   let errorMsg = null;
   if (ethers.utils.isAddress(tierAddress)) {
     try {
-      const iTier = new ITier(tierAddress, signer)
-      await iTier.report(signerAddress);
+      const iTier = new ITierV2(tierAddress, signer)
+      await iTier.report(signerAddress, []);
     }
     catch (err) {
       errorMsg = "Not a valid Tier Contract Address";
@@ -267,3 +268,4 @@ export const isTier = async (tierAddress, signer, signerAddress) => {
   }
   return { errorMsg };
 }
+

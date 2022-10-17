@@ -1,12 +1,11 @@
 <script>
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Switch from "src/components/Switch.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Switch from "$components/Switch.svelte";
   import { queryStore } from "@urql/svelte";
   import { formatUnits } from "ethers/lib/utils";
-  import { client } from "src/stores";
-  import dayjs from "dayjs";
+  import { client } from "$src/stores";
 
   let checked = true;
 
@@ -14,31 +13,30 @@
     client: $client,
 
     query: `
-        query{
-          emissionsERC20S(orderBy: deployTimestamp, orderDirection : desc, where:{ calculateClaimStateConfig_ : { sources_contains : ["0x01002e001d00010124001c00"]}}) {
-            id
-            address
-            deployBlock
-            deployTimestamp
-            deployer
-            name
-            symbol
-            totalSupply
-            decimals
-            claims{
+          query{
+            emissionsERC20S(orderBy: deployTimestamp, orderDirection : desc, where:{ calculateClaimStateConfig_ : { sources_contains : ["0x000002001900000100021800"]}}) {
               id
-              sender
-              data
-              amount
-            }
-            calculateClaimStateConfig {
-              id
-              sources
-              constants
-              stack
-            }
-            }
-        }`,
+              address
+              deployBlock
+              deployTimestamp
+              deployer
+              name
+              symbol
+              totalSupply
+              decimals
+              claims{
+                id
+                sender
+                data
+                amount
+              }
+              calculateClaimStateConfig {
+                id
+                sources
+                constants
+              }
+              }
+          }`,
     requestPolicy: "network-only",
     pause: checked ? false : true,
   });
@@ -46,31 +44,30 @@
   $: allFaucets = queryStore({
     client: $client,
     query: `
-        query{
-          emissionsERC20S(orderBy: deployTimestamp, orderDirection : desc, where:{ calculateClaimStateConfig_ : { sources_contains : ["0x01002e001d0001010102050008002e0022000104160213021f00240001031c001c00"]}}) {
-            id
-            address
-            deployBlock
-            deployTimestamp
-            deployer
-            name
-            symbol
-            totalSupply
-            decimals
-            claims{
+          query{
+            emissionsERC20S(orderBy: deployTimestamp, orderDirection : desc, where:{ calculateClaimStateConfig_ : { sources_contains : ["0x0000020019000001000211001000020029000004220220021b000005000318001800"]}}) {
               id
-              sender
-              data
-              amount
-            }
-            calculateClaimStateConfig {
-              id
-              sources
-              constants
-              stack
-            }
-            }
-        }`,
+              address
+              deployBlock
+              deployTimestamp
+              deployer
+              name
+              symbol
+              totalSupply
+              decimals
+              claims{
+                id
+                sender
+                data
+                amount
+              }
+              calculateClaimStateConfig {
+                id
+                sources
+                constants
+              }
+              }
+          }`,
     requestPolicy: "network-only",
     pause: !checked ? false : true,
   });
@@ -116,7 +113,7 @@
             >
             <span>Deployer: {emission.deployer}</span>
             <span
-              >Deployed: {dayjs.unix(emission.deployTimestamp).toString()}</span
+              >Deployed: {Date(emission.deployTimestamp).toLocaleString()}</span
             >
           </div>
         </div>

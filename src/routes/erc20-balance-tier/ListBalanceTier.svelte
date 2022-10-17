@@ -1,12 +1,11 @@
-<script>
+<!-- <script>
   import { BigNumber, ethers } from "ethers";
   import { formatUnits } from "ethers/lib/utils";
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
   import { queryStore } from "@urql/svelte";
   import { client } from "../../stores";
-  import dayjs from "dayjs";
 
   $: balanceTiers = queryStore({
     client: $client,
@@ -28,6 +27,8 @@
         }
       }`,
   });
+
+  // query(balanceTiers);
 </script>
 
 {#if $balanceTiers.fetching}
@@ -46,9 +47,9 @@
             <span>Contract Address: {balanceTier.id}</span>
             <span>Deployer: {balanceTier.deployer}</span>
             <span
-              >Deployed: {dayjs
-                .unix(balanceTier.deployTimestamp)
-                .toString()}</span
+              >Deployed: {Date(
+                balanceTier.deployTimestamp
+              ).toLocaleString()}</span
             >
             <span>
               Token tiers:
@@ -77,4 +78,4 @@
       </FormPanel>
     {/each}
   </div>
-{/if}
+{/if} -->

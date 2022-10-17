@@ -1,10 +1,11 @@
 <script>
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
   import { queryStore } from "@urql/svelte";
-  import { client } from "src/stores";
-  import dayjs from "dayjs";
+  import { client } from "$src/stores";
+  import dayjs, { unix } from "dayjs";
+
   $: combineTiers = queryStore({
     client: $client,
     query: `query {
@@ -17,6 +18,8 @@
         }
       }`,
   });
+
+  //query(combineTiers);
 </script>
 
 {#if $combineTiers.fetching}

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { signerAddress } from "svelte-ethers-store";
   import { signer } from "svelte-ethers-store";
-  import Button from "src/components/Button.svelte";
-  import FormPanel from "src/components/FormPanel.svelte";
-  import Input from "src/components/Input.svelte";
-  import { validateFields } from "src/utils";
-  import { defaultValidator } from "../gated-nft/minter-validation";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
+  import { validateFields } from "$src/utils";
+  import { required } from "../../validation";
   import { ethers } from "ethers";
-  import ContractDeploy from "src/components/ContractDeploy.svelte";
+  import ContractDeploy from "$components/ContractDeploy.svelte";
   import { Verify, VerifyTier } from "rain-sdk";
 
   export const roles = [
@@ -43,18 +43,32 @@
     deployVerifyTierPromise,
     verifyChild;
 
-  const deployVerify = async () => {
-    const { validationResult, fieldValues } = validateFields(verifyFields);
-
-    const newVerify = await Verify.deploy($signer, {admin: fieldValues.adminAddress});
+  const deployVerify = async (fieldValues) => {
+    console.log(fieldValues);
+    console.log({
+      admin: fieldValues.adminAddress,
+      callback: ethers.constants.AddressZero,
+    });
+    const newVerify = await Verify.deploy($signer, {
+      admin: fieldValues.adminAddress,
+      callback: ethers.constants.AddressZero,
+    });
     verifyChild = newVerify.address;
 
     return newVerify;
   };
 
-  const deployVerifyTier = async () => {
-    const { validationResult, fieldValues } = validateFields(verifyTierFields);
+  const handleClick = async (contract) => {
+    const { validationResult, fieldValues } = await validateFields(
+      contract === "verify" ? verifyFields : verifyTierFields
+    );
+    if (!validationResult) return;
+    if (contract === "verify") {
+      deployVerifyPromise = deployVerify(fieldValues);
+    } else deployVerifyTierPromise = deployVerifyTier(fieldValues);
+  };
 
+  const deployVerifyTier = async (fieldValues) => {
     const newVerifyTier = await VerifyTier.deploy(
       $signer,
       fieldValues.verifyAddress
@@ -84,7 +98,7 @@
     <Input
       type="text"
       bind:this={verifyFields.adminAddress}
-      validator={defaultValidator}
+      validator={required}
       value={$signerAddress}
     >
       <span slot="label">Admin address: </span>
@@ -99,7 +113,7 @@
       <Button
         shrink
         on:click={() => {
-          deployVerifyPromise = deployVerify();
+          handleClick("verify");
         }}>Deploy Verify</Button
       >
     {:else}
@@ -111,7 +125,7 @@
     <Input
       type="text"
       bind:this={verifyTierFields.verifyAddress}
-      validator={defaultValidator}
+      validator={required}
       value={verifyChild}
     >
       <span slot="label">Verify address: </span>
@@ -126,7 +140,7 @@
       <Button
         shrink
         on:click={() => {
-          deployVerifyTierPromise = deployVerifyTier();
+          handleClick("verifyTier");
         }}>Deploy VerifyTier</Button
       >
     {:else}

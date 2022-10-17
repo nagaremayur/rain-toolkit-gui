@@ -1,16 +1,12 @@
 <script lang="ts">
-  import { formatAddress } from "src/utils";
-  import Button from "../../../components/Button.svelte";
-  import Steps from "../../../components/steps/Steps.svelte";
-  import Ring from "../../../components/Ring.svelte";
-  import { selectedNetwork } from "src/stores";
+  import { formatAddress } from "$src/utils";
+  import Button from "$components/Button.svelte";
+  import Steps from "$components/steps/Steps.svelte";
+  import Ring from "$components/Ring.svelte";
+  import { selectedNetwork } from "$src/stores";
   import { signer } from "svelte-ethers-store";
   import { RedeemableERC20ClaimEscrow } from "rain-sdk";
-  import { writable } from "svelte/store";
-  import Modal, { bind } from "svelte-simple-modal/src/Modal.svelte";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
-
-  const modal2 = writable(null);
+  import { Logger } from "ethers/lib/utils";
 
   enum TxStatus {
     None,
@@ -30,29 +26,45 @@
     activeStep = SweepingSteps.Confirm,
     txStatus = TxStatus.None,
     txReceipt;
-  let redeemableEscrow;
 
-  (async () =>
-    (redeemableEscrow = await RedeemableERC20ClaimEscrow.get(
+  const sweep = async () => {
+    let tx;
+    txStatus = TxStatus.AwaitingSignature;
+
+    let redeemableEscrow = await RedeemableERC20ClaimEscrow.get(
       salesContract.address,
-      data.deposit.token.id,
+      data.token.id,
       $signer
-    )))();
-
-  const showModal = () =>
-    modal2.set(
-      bind(SimpleTransactionModal, {
-        method: redeemableEscrow.sweepPending,
-        args: [data.depositorAddress],
-        confirmationMsg: "Withdraw confirmed!",
-        returnValue,
-      })
     );
 
-  const returnValue = (method, receipt) => {
+    try {
+      tx = await redeemableEscrow.sweepPending(data.depositorAddress);
+      txStatus = TxStatus.AwaitingConfirmation;
+      txReceipt = await tx.wait();
+    } catch (error) {
+      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
+        if (error.cancelled) {
+          errorMsg = "Transaction Cancelled";
+          txStatus = TxStatus.Error;
+          return;
+        } else {
+          txReceipt = await error.replacement.wait();
+        }
+      } else {
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
+        txStatus = TxStatus.Error;
+        return;
+      }
+    }
+
     txStatus = TxStatus.None;
     activeStep = SweepingSteps.Complete;
-    txReceipt = receipt;
+
+    return txReceipt;
   };
 </script>
 
@@ -79,17 +91,7 @@
 
     {#if activeStep == SweepingSteps.Confirm}
       <span>Confirm your Sweep Pending Deposit.</span>
-      <Modal
-        show={$modal2}
-        styleContent={{ color: "rgba(249, 250, 251, 1)" }}
-        styleWindow={{
-          backgroundColor: "rgba(17, 24, 39, 1) !important",
-          width: "fit-content",
-        }}
-        closeButton={false}
-      >
-        <Button on:click={showModal}>Confirm</Button>
-      </Modal>
+      <Button on:click={sweep}>Confirm</Button>
     {/if}
 
     {#if activeStep == SweepingSteps.Complete}

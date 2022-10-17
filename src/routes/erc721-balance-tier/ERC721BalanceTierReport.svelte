@@ -1,20 +1,20 @@
 <script lang="ts">
   import { signerAddress, signer } from "svelte-ethers-store";
   import { ethers } from "ethers";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Input from "../../components/Input.svelte";
-  import Button from "../../components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
+  import Button from "$components/Button.svelte";
   import { tierReport } from "../../utils";
   import { push } from "svelte-spa-router";
   import { queryStore } from "@urql/svelte";
-  import { client } from "src/stores";
+  import { client } from "$src/stores";
   import { ERC721BalanceTier, ERC721 } from "rain-sdk";
+  import { addressValidate, required } from "$src/validation";
 
   export let params;
 
   let balanceTierContract,
     tierValues,
-    erc721AddressError,
     errorMsg,
     erc721Contract,
     erc721Name,
@@ -48,6 +48,17 @@
     pause: params.wild ? false : true,
   });
 
+  //query(balanceTier);
+
+  // $: if (params.wild) {
+  //   runQuery();
+  // }
+  // const runQuery = () => {
+  //   $balanceTier.variables.balanceTierAddress = params.wild.toLowerCase();
+  //   $balanceTier.context.pause = false;
+  //   $balanceTier.reexecute();
+  // };
+
   $: _balanceTier = $balanceTier.data?.erc721BalanceTiers[0];
 
   $: if (_balanceTier || $signer) {
@@ -79,16 +90,14 @@
     }
   };
 
-  $: if (addressToReport) {
-    ethers.utils.isAddress(addressToReport)
-      ? (erc721AddressError = null)
-      : (erc721AddressError = "Not a valid Ethereum address");
-  }
-
   const report = async () => {
-    const report = await balanceTierContract.report(addressToReport);
-    parsedReport = tierReport(report);
-    addressBalance = await erc721Contract.balanceOf(addressToReport);
+    if (ethers.utils.isAddress(addressToReport)) {
+      const report = await balanceTierContract.report(addressToReport);
+      parsedReport = tierReport(report);
+      addressBalance = await erc721Contract.balanceOf(addressToReport);
+    } else {
+      errorMsg = "Not a valid Ethereum address";
+    }
   };
 
   const reportMyAddress = () => {
@@ -129,7 +138,7 @@
         bind:value={addressToReport}
         type="text"
         placeholder="Enter an Ethereum address"
-        errorMsg={erc721AddressError}
+        validator={required}
       />
       <div class="flex flex-row gap-x-2">
         <Button shrink on:click={report}>Get a report</Button>
@@ -169,6 +178,7 @@
         bind:value={balanceTierAddress}
         type="address"
         placeholder="Contract address"
+        validator={addressValidate}
       />
       <Button
         on:click={() => {

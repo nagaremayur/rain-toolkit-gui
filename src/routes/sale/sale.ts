@@ -5,16 +5,17 @@ import {
   PriceCurve,
   FixedPrice,
   vLBP,
-  IncreasingPrice,
-  SaleDurationInTimestamp
+  IncDecPrice,
+  BetweenTimestamps,
+  BuyAmount,
+  SaleVmFrom
 } from 'rain-sdk'
-
 
 export enum selectSale {
   fixedPrice,
   vLBP,
   increasingPrice,
-};
+}
 
 export type SaleParams = {
   inputValues: any;
@@ -27,7 +28,6 @@ export type SaleParams = {
   tierDiscountActMode: boolean;
   tierCapMulMode: boolean;
   tierCapMulActMode: boolean;
-  creatorControlMode: boolean;
   afterMinimumRaiseMode: boolean;
 };
 
@@ -63,9 +63,9 @@ export const getAfterTimestamp = (stateConfig, i) => {
 export const saleStatuses = ["Pending", "Active", "Success", "Fail"];
 
 
-export function canEndConfig(config: SaleParams, deployerAddress: string) {
+export function getSaleDuration(config: SaleParams, deployerAddress: string) {
 
-  const _saleTime_ = new SaleDurationInTimestamp(config.inputValues.endTimestamp)
+  const _saleTime_ = new BetweenTimestamps(config.inputValues.startTimestamp, config.inputValues.endTimestamp)
 
   if (config.extraTimeDiscountMode) {
     _saleTime_.applyExtraTime(
@@ -73,38 +73,12 @@ export function canEndConfig(config: SaleParams, deployerAddress: string) {
       config.inputValues.extraTimeAmount,
       config.inputValues.reserveErc20?.erc20decimals
     )
-    if (config.creatorControlMode) {
-      _saleTime_.applyOwnership(deployerAddress)
-    }
   }
   else if (config.afterMinimumRaiseMode) {
     _saleTime_.afterMinimumRaise(
       config.inputValues.minimumRaise,
       config.inputValues.reserveErc20?.erc20decimals
     )
-    if (config.creatorControlMode) {
-      _saleTime_.applyOwnership(deployerAddress)
-    }
-  }
-  else {
-    if (config.creatorControlMode && config.canEndMode) {
-      _saleTime_.applyExtraTime(
-        config.inputValues.extraTime,
-        config.inputValues.extraTimeAmount,
-        config.inputValues.reserveErc20?.erc20decimals
-      )
-        .applyOwnership(deployerAddress)
-    }
-    if (!config.creatorControlMode && config.canEndMode) {
-      _saleTime_.applyExtraTime(
-        config.inputValues.extraTime,
-        config.inputValues.extraTimeAmount,
-        config.inputValues.reserveErc20?.erc20decimals
-      )
-    }
-    if (config.creatorControlMode && !config.canEndMode) {
-      _saleTime_.applyOwnership(deployerAddress)
-    }
   }
   return _saleTime_;
 }
@@ -136,7 +110,7 @@ export function calculatePriceConfig(config: SaleParams) {
 
     //if sale is a Linear Increasing Price
     if (config.saleType == selectSale.increasingPrice) {
-      return new IncreasingPrice(
+      return new IncDecPrice(
         config.inputValues.startPrice,
         config.inputValues.endPrice,
         config.inputValues.startTimestamp,
@@ -174,16 +148,19 @@ export function calculatePriceConfig(config: SaleParams) {
           config.inputValues.discountTier7,
           config.inputValues.discountTier8
         ],
-        [
-          config.inputValues.discountActTier1,
-          config.inputValues.discountActTier2,
-          config.inputValues.discountActTier3,
-          config.inputValues.discountActTier4,
-          config.inputValues.discountActTier5,
-          config.inputValues.discountActTier6,
-          config.inputValues.discountActTier7,
-          config.inputValues.discountActTier8
-        ]
+        {
+          tierActivation: [
+            config.inputValues.discountActTier1,
+            config.inputValues.discountActTier2,
+            config.inputValues.discountActTier3,
+            config.inputValues.discountActTier4,
+            config.inputValues.discountActTier5,
+            config.inputValues.discountActTier6,
+            config.inputValues.discountActTier7,
+            config.inputValues.discountActTier8
+          ],
+          tierContext: []
+        }
       )
     }
     else {
@@ -202,18 +179,26 @@ export function calculatePriceConfig(config: SaleParams) {
       )
     }
   }
+
+  return _sale_;
+
+}
+
+export const getBuyWalletCap = (config: SaleParams) => {
+
+  const BuyCap = new BuyAmount()
+
   //if both Min and Max Cap Per Wallet are enabled
   if (config.maxCapMode && config.minCapMode) {
     //if Max cap tier Multiplier is enabled
     if (config.tierCapMulMode) {
       //if tierActivation is enabled
       if (config.tierCapMulActMode) {
-        _sale_.applyWalletCap(
+        BuyCap.applyWalletCap(
           2,
           {
             maxWalletCap: config.inputValues.maxWalletCap,
             minWalletCap: config.inputValues.minWalletCap,
-            tierMultiplierMode: true,
             tierAddress: config.inputValues.tierCapMulAddress,
             tierMultiplier: [
               config.inputValues.capMulTier1,
@@ -234,17 +219,17 @@ export function calculatePriceConfig(config: SaleParams) {
               config.inputValues.capMulActTier6,
               config.inputValues.capMulActTier7,
               config.inputValues.capMulActTier8
-            ]
+            ],
+            tierContext: []
           }
         )
       }
       else {
-        _sale_.applyWalletCap(
+        BuyCap.applyWalletCap(
           2,
           {
             maxWalletCap: config.inputValues.maxWalletCap,
             minWalletCap: config.inputValues.minWalletCap,
-            tierMultiplierMode: true,
             tierAddress: config.inputValues.tierCapMulAddress,
             tierMultiplier: [
               config.inputValues.capMulTier1,
@@ -255,17 +240,19 @@ export function calculatePriceConfig(config: SaleParams) {
               config.inputValues.capMulTier6,
               config.inputValues.capMulTier7,
               config.inputValues.capMulTier8
-            ]
+            ],
+            tierContext: []
           }
         )
       }
     }
     else {
-      _sale_.applyWalletCap(
+      BuyCap.applyWalletCap(
         2,
         {
           maxWalletCap: config.inputValues.maxWalletCap,
           minWalletCap: config.inputValues.minWalletCap,
+          tierContext: []
         }
       )
     }
@@ -277,11 +264,10 @@ export function calculatePriceConfig(config: SaleParams) {
     if (config.tierCapMulMode) {
       //if tierActivation is enabled
       if (config.tierCapMulActMode) {
-        _sale_.applyWalletCap(
+        BuyCap.applyWalletCap(
           1,
           {
             maxWalletCap: config.inputValues.maxWalletCap,
-            tierMultiplierMode: true,
             tierAddress: config.inputValues.tierCapMulAddress,
             tierMultiplier: [
               config.inputValues.capMulTier1,
@@ -307,11 +293,10 @@ export function calculatePriceConfig(config: SaleParams) {
         )
       }
       else {
-        _sale_.applyWalletCap(
+        BuyCap.applyWalletCap(
           1,
           {
             maxWalletCap: config.inputValues.maxWalletCap,
-            tierMultiplierMode: true,
             tierAddress: config.inputValues.tierCapMulAddress,
             tierMultiplier: [
               config.inputValues.capMulTier1,
@@ -328,24 +313,32 @@ export function calculatePriceConfig(config: SaleParams) {
       }
     }
     else {
-      _sale_.applyWalletCap(
+      BuyCap.applyWalletCap(
         1,
         { maxWalletCap: config.inputValues.maxWalletCap }
       )
     }
   }
 
-
   //if only Min Cap Per Wallet is enabled
   if (!config.maxCapMode && config.minCapMode) {
-    _sale_.applyWalletCap(
+    BuyCap.applyWalletCap(
       0,
       { minWalletCap: config.inputValues.minWalletCap }
     )
   }
 
-  return _sale_;
+  return BuyCap;
+}
 
+export const getVMStateConfig = (config: SaleParams, deployerAddress: string) => {
+  const saleDuration = getSaleDuration(config, deployerAddress);
+  const applyWalletCap = getBuyWalletCap(config);
+  const price = calculatePriceConfig(config);
+
+  const vmStateConfig = new SaleVmFrom(saleDuration, applyWalletCap, price)
+
+  return vmStateConfig;
 }
 
 
@@ -359,11 +352,12 @@ export const saleDeploy = async (
   const newSale = Sale.deploy(
     deployer,
     {
-      canStartStateConfig: config.creatorControlMode
-        ? new SaleDurationInTimestamp(config.inputValues.startTimestamp).applyOwnership(deployerAddress)
-        : new SaleDurationInTimestamp(config.inputValues.startTimestamp),
-      canEndStateConfig: canEndConfig(config, deployerAddress),
-      calculatePriceStateConfig: calculatePriceConfig(config),
+      // canStartStateConfig: config.creatorControlMode
+      //   ? new BetweenTimestamps(config.inputValues.startTimestamp).applyOwnership(deployerAddress)
+      //   : new BetweenTimestamps(config.inputValues.startTimestamp),
+      // canEndStateConfig: canEndConfig(config, deployerAddress),
+      // calculatePriceStateConfig: calculatePriceConfig(config),
+      vmStateConfig: getVMStateConfig(config, deployerAddress),
       recipient: config.inputValues.recipient,
       reserve: config.inputValues.reserve,
       saleTimeout: 10,

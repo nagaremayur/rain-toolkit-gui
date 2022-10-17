@@ -1,19 +1,14 @@
 <script lang="ts">
   import { signer } from "svelte-ethers-store";
-  import { formatUnits, parseUnits } from "ethers/lib/utils";
-  import Button from "../../../components/Button.svelte";
-  import Steps from "../../../components/steps/Steps.svelte";
-  import Ring from "../../../components/Ring.svelte";
-  import Input from "src/components/Input.svelte";
-  import { selectedNetwork } from "src/stores";
+  import { formatUnits, Logger, parseUnits } from "ethers/lib/utils";
+  import Button from "$components/Button.svelte";
+  import Steps from "$components/steps/Steps.svelte";
+  import Ring from "$components/Ring.svelte";
+  import Input from "$components/Input.svelte";
+  import { selectedNetwork } from "$src/stores";
   import { saleStatuses } from "../sale";
   import { ERC20, RedeemableERC20ClaimEscrow } from "rain-sdk";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
-  import { writable } from "svelte/store";
-  import Modal, { bind } from "svelte-simple-modal/src/Modal.svelte";
-
-  const modal2 = writable(null);
-  const modal3 = writable(null);
+  import { addressValidate, required } from "$src/validation";
 
   enum TxStatus {
     None,
@@ -50,7 +45,6 @@
 
   let tokenAddress: string = "0x25a4Dd4cd97ED462EB5228de47822e636ec3E31A",
     units,
-    rTKN,
     redeemableEscrow,
     tokenDecimals,
     tokenSymbol,
@@ -61,58 +55,6 @@
     errorMsg,
     calcPricePromise,
     saleStatus = saleStatuses[saleData.saleStatus];
-
-  rTKN = new ERC20(tokenAddress, $signer);
-
-  (async () => (tokenDecimals = await rTKN.decimals()))();
-  (async () => (tokenSymbol = await rTKN.symbol()))();
-  (async () =>
-    (redeemableEscrow = await RedeemableERC20ClaimEscrow.get(
-      sale.address,
-      tokenAddress,
-      $signer
-    )))();
-
-  const showApproveModal = () =>
-    modal2.set(
-      bind(SimpleTransactionModal, {
-        method: rTKN.approve,
-        args: [redeemableEscrow.address, units],
-        confirmationMsg: "Amount Approved",
-        func: "approve",
-        returnValue,
-      })
-    );
-
-  const showDepositModal = () =>
-    modal3.set(
-      bind(SimpleTransactionModal, {
-        method: redeemableEscrow.deposit,
-        args: [units],
-        confirmationMsg: "Amount Deposited",
-        returnValue,
-      })
-    );
-
-  const showPendingDepositModal = () =>
-    modal3.set(
-      bind(SimpleTransactionModal, {
-        method: redeemableEscrow.depositPending,
-        args: [units],
-        confirmationMsg: "Amount Deposited",
-        returnValue,
-      })
-    );
-
-  const returnValue = (method, receipt) => {
-    txStatus = TxStatus.None;
-    if (method == true) {
-      activeStep = DepositSteps.Confirm;
-    } else {
-      activeStep = DepositSteps.Complete;
-      txReceipt = receipt;
-    }
-  };
 
   const calculatePrice = async (amount) => {
     priceConfirmed = PriceConfirmed.Pending;
@@ -129,6 +71,115 @@
       _units,
     };
   };
+
+  const approve = async () => {
+    const rTKN = new ERC20(tokenAddress, $signer);
+
+    tokenDecimals = await rTKN.decimals();
+    tokenSymbol = await rTKN.symbol();
+
+    redeemableEscrow = await RedeemableERC20ClaimEscrow.get(
+      sale.address,
+      tokenAddress,
+      $signer
+    );
+
+    let tx;
+    txStatus = TxStatus.AwaitingSignature;
+    try {
+      tx = await rTKN.approve(redeemableEscrow.address, units);
+
+      txStatus = TxStatus.AwaitingConfirmation;
+      const txReceipt = await tx.wait();
+    } catch (error) {
+      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
+        if (error.cancelled) {
+          errorMsg = "Transaction Cancelled";
+          txStatus = TxStatus.Error;
+          return;
+        } else {
+          txReceipt = await error.replacement.wait();
+        }
+      } else {
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
+        txStatus = TxStatus.Error;
+        return;
+      }
+    }
+
+    txStatus = TxStatus.None;
+    activeStep = DepositSteps.Confirm;
+
+    return txReceipt;
+  };
+
+  const Deposit = async () => {
+    let tx;
+    txStatus = TxStatus.AwaitingSignature;
+    try {
+      tx = await redeemableEscrow.deposit(units);
+
+      txStatus = TxStatus.AwaitingConfirmation;
+      txReceipt = await tx.wait();
+    } catch (error) {
+      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
+        if (error.cancelled) {
+          errorMsg = "Transaction Cancelled";
+          txStatus = TxStatus.Error;
+          return;
+        } else {
+          txReceipt = await error.replacement.wait();
+        }
+      } else {
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
+        txStatus = TxStatus.Error;
+        return;
+      }
+    }
+    txStatus = TxStatus.None;
+    activeStep = DepositSteps.Complete;
+  };
+
+  const pendingDeposit = async () => {
+    let tx;
+    txStatus = TxStatus.AwaitingSignature;
+
+    try {
+      tx = await redeemableEscrow.depositPending(units);
+
+      txStatus = TxStatus.AwaitingConfirmation;
+      txReceipt = await tx.wait();
+    } catch (error) {
+      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
+        if (error.cancelled) {
+          errorMsg = "Transaction Cancelled";
+          txStatus = TxStatus.Error;
+          return;
+        } else {
+          txReceipt = await error.replacement.wait();
+        }
+      } else {
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
+        txStatus = TxStatus.Error;
+        return;
+      }
+    }
+
+    txStatus = TxStatus.None;
+    activeStep = DepositSteps.Complete;
+  };
 </script>
 
 {#if txStatus == TxStatus.None}
@@ -142,7 +193,12 @@
     />
 
     {#if activeStep == DepositSteps.Approve}
-      <Input type="address" bind:value={tokenAddress} from="depositModal">
+      <Input
+        type="address"
+        bind:value={tokenAddress}
+        from="depositModal"
+        validator={addressValidate}
+      >
         <span slot="label">Enter token:</span>
       </Input>
       <Input
@@ -151,20 +207,12 @@
           calcPricePromise = calculatePrice(detail);
         }}
         debounce
+        validator={required}
       >
         <span slot="label">Enter the number of units to deposit:</span>
       </Input>
-      <Modal
-        show={$modal2}
-        styleContent={{ color: "rgba(249, 250, 251, 1)" }}
-        styleWindow={{
-          backgroundColor: "rgba(17, 24, 39, 1) !important",
-          width: "fit-content",
-        }}
-        closeButton={false}
-      >
-        <Button on:click={showApproveModal}>Approve Amount</Button>
-      </Modal>
+
+      <Button on:click={approve}>Approve Amount</Button>
     {/if}
     {#if activeStep == DepositSteps.Confirm}
       <span>Confirm your deposit.</span>
@@ -185,24 +233,14 @@
         {/if}
       </div>
 
-      <Modal
-        show={$modal3}
-        styleContent={{ color: "rgba(249, 250, 251, 1)" }}
-        styleWindow={{
-          backgroundColor: "rgba(17, 24, 39, 1) !important",
-          width: "fit-content",
-        }}
-        closeButton={false}
+      <Button
+        disabled={!priceConfirmed}
+        on:click={saleStatus == "Pending" || saleStatus == "Active"
+          ? pendingDeposit
+          : Deposit}
       >
-        <Button
-          disabled={!priceConfirmed}
-          on:click={saleStatus == "Pending" || saleStatus == "Active"
-            ? showPendingDepositModal
-            : showDepositModal}
-        >
-          Deposit</Button
-        >
-      </Modal>
+        Deposit</Button
+      >
     {/if}
 
     {#if activeStep == DepositSteps.Complete}

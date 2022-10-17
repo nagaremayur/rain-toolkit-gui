@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Contract } from "ethers";
-  import Button from "src/components/Button.svelte";
-  import FormPanel from "src/components/FormPanel.svelte";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import SimpleTransactionModal from "$components/SimpleTransactionModal.svelte";
   import { getContext } from "svelte";
 
   const { open } = getContext("simple-modal");
@@ -22,7 +22,6 @@
       const splitLine = line.split("\t");
       return { account: splitLine[0], data: encoder.encode(splitLine[1]) };
     });
-
     open(SimpleTransactionModal, {
       method: verifyContract.approve,
       args: [evidences],

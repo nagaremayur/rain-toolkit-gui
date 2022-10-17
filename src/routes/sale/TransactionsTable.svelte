@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatAddress } from "src/utils";
+  import { formatAddress } from "$src/utils";
   import RefundModal from "./RefundModal.svelte";
   import { queryStore } from "@urql/svelte";
   import { formatUnits } from "ethers/lib/utils";
   import { signerAddress } from "svelte-ethers-store";
   import { getContext } from "svelte";
-  import IconLibrary from "components/IconLibrary.svelte";
+  import IconLibrary from "$components/IconLibrary.svelte";
   import dayjs from "dayjs";
-  import { selectedNetwork } from "src/stores";
-  import Switch from "src/components/Switch.svelte";
-  import { client } from "src/stores";
+  import { selectedNetwork } from "$src/stores";
+  import Switch from "$components/Switch.svelte";
+  import { client } from "$src/stores";
 
   const { open } = getContext("simple-modal");
   export let saleContract;
@@ -122,14 +122,11 @@
 
   // handling table refresh
   const refresh = async () => {
-    if (!$txQuery.fetching) {
-      temp = saleContractAddress;
-      saleContractAddress = undefined;
-      if (await !$txQuery.fetching) {
-        saleContractAddress = temp;
-      }
+    temp = saleContractAddress;
+    saleContractAddress = undefined;
+    if (await !$txQuery.fetching) {
+      saleContractAddress = temp;
     }
-    
   };
 
   // aliases for convenience

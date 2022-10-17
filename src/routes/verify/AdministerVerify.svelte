@@ -1,15 +1,16 @@
 <script lang="ts">
   import { signer } from "svelte-ethers-store";
   import { ethers } from "ethers";
-  import Button from "src/components/Button.svelte";
-  import FormPanel from "src/components/FormPanel.svelte";
-  import Input from "src/components/Input.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
   import { push } from "svelte-spa-router";
   import AdministerRolesTab from "./AdministerRolesTab.svelte";
-  import { Tabs, TabList, TabPanel, Tab } from "src/components/tabs/tabs";
+  import { Tabs, TabList, TabPanel, Tab } from "$components/tabs/tabs";
   import AccountsTable from "./AccountsTable.svelte";
   import ApproveAddress from "./ApproveAddress.svelte";
   import { Verify } from "rain-sdk";
+  import { addressValidate } from "$src/validation";
 
   export let params: {
     wild: string;
@@ -40,6 +41,7 @@
         bind:value={verifyAddressInput}
         type="address"
         placeholder="Contract address"
+        validator={addressValidate}
       />
       <Button
         on:click={() => {

@@ -3,16 +3,13 @@
   import { formatUnits } from "ethers/lib/utils";
   import { signer, signerAddress } from "svelte-ethers-store";
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Input from "../../components/Input.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
   import TokenInfo from "../sale/TokenInfo.svelte";
   import { EmissionsERC20 } from "rain-sdk";
-  import { getERC20 } from "src/utils";
-  import { getContext } from "svelte";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
-
-  const { open } = getContext("simple-modal");
+  import { getERC20 } from "$src/utils";
+  import { addressValidate } from "$src/validation";
 
   export let params: {
     wild: string;
@@ -22,7 +19,6 @@
   let errorMsg, emissionsAddress;
   let showClaim;
   let initPromise, calcClaimPromise, claimPromise;
-  let claimed = false;
 
   $: if (params.wild) {
     initPromise = initContract();
@@ -43,20 +39,12 @@
     return claim;
   };
 
-  let returnValue = (method, receipt) => {};
-
   const claim = async () => {
-    await open(SimpleTransactionModal, {
-      method: emissionsContract.claim,
-      args: [$signerAddress, ethers.constants.AddressZero],
-      confirmationMsg: "Claim Completed",
-      returnValue,
-    });
-
-    returnValue = (method, receipt) => {
-      claimed = true;
-      return receipt;
-    };
+    const tx = await emissionsContract.claim(
+      $signerAddress,
+      ethers.constants.AddressZero
+    );
+    return await tx.wait();
   };
 </script>
 
@@ -74,6 +62,7 @@
         bind:value={emissionsAddress}
         type="address"
         placeholder="Contract address"
+        validator={addressValidate}
       />
       <Button
         on:click={() => {
@@ -142,10 +131,9 @@
             {#if claimPromise}
               {#await claimPromise}
                 Claiming...
-              {/await}
-              {#if claimed}
+              {:then}
                 Claim complete! Refresh to see your new balance.
-              {/if}
+              {/await}
             {/if}
           {/if}
         </FormPanel>

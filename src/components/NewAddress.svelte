@@ -1,7 +1,7 @@
 <script lang="ts">
-  import NewAlias from "src/routes/address-library/NewAlias.svelte";
+  import NewAlias from "$src/routes/address-library/NewAlias.svelte";
 
-  import { formatAddress } from "src/utils";
+  import { formatAddress } from "$src/utils";
   import { getContext } from "svelte";
   import IconLibrary from "./IconLibrary.svelte";
 
@@ -18,13 +18,6 @@
   class="inline-flex flex-row items-center gap-x-2 self-start rounded-3xl bg-gray-700 px-4 py-2 text-gray-200"
 >
   <div>{formatAddress(address)}</div>
-  <span class="pointer" on:click={handleSave}
-    ><IconLibrary inline icon="add" width={15} /></span
+  <span on:click={handleSave}><IconLibrary inline icon="add" width={15} /></span
   >
 </div>
-
-<style>
-  .pointer {
-    cursor: pointer;
-  }
-</style>

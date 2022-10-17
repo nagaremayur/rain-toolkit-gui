@@ -4,9 +4,9 @@
   import { ethers } from "ethers";
   import { signer } from "svelte-ethers-store";
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Input from "../../components/Input.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
   import Buy from "./Buy.svelte";
   import SaleProgress from "./SaleProgress.svelte";
   import CheckTier from "./CheckTier.svelte";
@@ -19,8 +19,8 @@
   import EscrowPendingDepositTable from "./escrow/EscrowPendingDepositTable.svelte";
   import EscrowUndepositTable from "./escrow/EscrowUndepositTable.svelte";
   import { Sale, ERC20 } from "rain-sdk";
-  import { client } from "src/stores";
-  import { Logger } from "ethers/lib/utils";
+  import { client } from "$src/stores";
+  import { addressValidate } from "$src/validation";
 
   export let params: {
     wild: string;
@@ -96,15 +96,7 @@
       const tx = await sale.start();
       await tx.wait();
     } catch (error) {
-      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
-        if (error.cancelled) {
-          throw error;
-        } else {
-          await error.replacement.wait();
-        }
-      } else {
-        throw error;
-      }
+      throw error;
     }
   };
 
@@ -113,15 +105,7 @@
       const tx = await sale.end();
       await tx.wait();
     } catch (error) {
-      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
-        if (error.cancelled) {
-          throw error;
-        } else {
-          await error.replacement.wait();
-        }
-      } else {
-        throw error;
-      }
+      throw error;
     }
   };
 
@@ -141,6 +125,7 @@
         bind:value={saleAddressInput}
         type="address"
         placeholder="Contract address"
+        validator={addressValidate}
       />
       <Button
         on:click={() => {
@@ -179,7 +164,12 @@
               {:then}
                 <span class="text-blue-400">Started!</span>
               {:catch error}
-                <span class="text-red-400">{error.data.message}</span>
+                <span class="text-red-400"
+                  >{error.error?.data?.message ||
+                    error.error?.message ||
+                    error.data?.message ||
+                    error?.message}</span
+                >
               {/await}
             {/if}
           </div>
@@ -197,7 +187,12 @@
               {:then}
                 <span class="text-blue-400">Ended!</span>
               {:catch error}
-                <span class="text-red-400">{error.data.message}</span>
+                <span class="text-red-400"
+                  >{error.error?.data?.message ||
+                    error.error?.message ||
+                    error.data?.message ||
+                    error?.message}</span
+                >
               {/await}
             {/if}
           </div>

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { getContext, onMount } from "svelte";
   import Ring from "./Ring.svelte";
-  import { selectedNetwork } from "src/stores";
-  import { ContractReceipt } from "ethers";
+  import { selectedNetwork } from "$src/stores";
+  import type { ContractReceipt } from "ethers";
   import Button from "./Button.svelte";
   import { Logger } from "ethers/lib/utils";
 
@@ -51,12 +51,15 @@
           receipt = await error.replacement.wait();
         }
       } else {
-        errorMsg = error.data?.message || error?.message;
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
         txStatus = TxStatus.Error;
         return;
       }
     }
-
     txStatus = TxStatus.Confirmed;
   });
 </script>

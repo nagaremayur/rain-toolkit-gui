@@ -1,16 +1,12 @@
 <script lang="ts">
-  import { formatUnits, parseUnits } from "ethers/lib/utils";
-  import Button from "../../components/Button.svelte";
-  import Steps from "../../components/steps/Steps.svelte";
-  import Ring from "../../components/Ring.svelte";
+  import { formatUnits, Logger, parseUnits } from "ethers/lib/utils";
+  import Button from "$components/Button.svelte";
+  import Steps from "$components/steps/Steps.svelte";
+  import Ring from "$components/Ring.svelte";
   import { BigNumber, ethers } from "ethers";
-  import Input from "src/components/Input.svelte";
-  import { selectedNetwork } from "src/stores";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
-  import { writable } from "svelte/store";
-  import Modal, { bind } from "svelte-simple-modal/src/Modal.svelte";
-
-  const modal2 = writable(null);
+  import Input from "$components/Input.svelte";
+  import { selectedNetwork } from "$src/stores";
+  import { required } from "$src/validation";
 
   enum TxStatus {
     None,
@@ -50,7 +46,6 @@
     txReceipt,
     errorMsg,
     calcPricePromise;
-  let buyConfig;
 
   const calculatePrice = async (amount) => {
     priceConfirmed = PriceConfirmed.Pending;
@@ -61,20 +56,13 @@
     );
     units = _units;
 
-    const price = await sale.calculatePrice(_units);
-    const subtotal = price.mul(_units).div(one);
+    const price = await sale.calculateBuy(_units);
+
+    const subtotal = price[1].mul(_units).div(one);
     fee = subtotal.div(BigNumber.from(100));
     const total = subtotal.add(fee);
 
     priceConfirmed = PriceConfirmed.Confirmed;
-
-    buyConfig = {
-      feeRecipient: await $signer.getAddress(), // should be set to platform fee recipient
-      fee: fee,
-      minimumUnits: units,
-      desiredUnits: units,
-      maximumPrice: ethers.constants.MaxUint256,
-    };
 
     return {
       subtotal,
@@ -83,20 +71,46 @@
     };
   };
 
-  const showBuyModal = () =>
-    modal2.set(
-      bind(SimpleTransactionModal, {
-        method: sale.buy,
-        args: [buyConfig],
-        confirmationMsg: "Amount Deposited",
-        returnValue,
-      })
-    );
+  const buy = async () => {
+    const buyConfig = {
+      feeRecipient: await $signer.getAddress(), // should be set to platform fee recipient
+      fee: fee,
+      minimumUnits: units,
+      desiredUnits: units,
+      maximumPrice: ethers.constants.MaxUint256,
+    };
 
-  const returnValue = (method, receipt) => {
+    let tx;
+    txStatus = TxStatus.AwaitingSignature;
+
+    try {
+      tx = await sale.buy(buyConfig);
+      txStatus = TxStatus.AwaitingConfirmation;
+
+      txReceipt = await tx.wait();
+    } catch (error) {
+      if (error.code === Logger.errors.TRANSACTION_REPLACED) {
+        if (error.cancelled) {
+          errorMsg = "Transaction Cancelled";
+          txStatus = TxStatus.Error;
+          return;
+        } else {
+          txReceipt = await error.replacement.wait();
+        }
+      } else {
+        errorMsg =
+          error.error?.data?.message ||
+          error.error?.message ||
+          error.data?.message ||
+          error?.message;
+
+        txStatus = TxStatus.Error;
+        return;
+      }
+    }
+
     txStatus = TxStatus.None;
     activeStep = BuySteps.Complete;
-    txReceipt = receipt;
   };
 </script>
 
@@ -117,6 +131,7 @@
           calcPricePromise = calculatePrice(detail);
         }}
         debounce
+        validator={required}
       >
         <span slot="label">Enter the number of units to buy:</span>
       </Input>
@@ -125,54 +140,39 @@
           {#await calcPricePromise}
             Getting price...
           {:then result}
-            {#if result.price.gte(ethers.constants.MaxUint256)}
-              <span class="text-red-500">Wallet Cap Breached</span>
-            {:else}
-              <div class="flex flex-row gap-x-3">
-                <span
-                  >Price: {Number(
-                    (+formatUnits(
-                      result.subtotal,
-                      saleData.reserve.decimals
-                    )).toFixed(4)
-                  )}
+            <div class="flex flex-row gap-x-3">
+              <span
+                >Price: {Number(
+                  (+formatUnits(
+                    result.subtotal,
+                    saleData.reserve.decimals
+                  )).toFixed(4)
+                )}
 
-                  {saleData.reserve.symbol}</span
-                >
-                <span
-                  >Fee: {Number(
-                    (+formatUnits(
-                      result.fee,
-                      saleData.reserve.decimals
-                    )).toFixed(4)
-                  )}
-                  <!-- {saleData.reserve.symbol} -->
-                </span>
-                <span
-                  >Total: {Number(
-                    (+formatUnits(
-                      result.total,
-                      saleData.reserve.decimals
-                    )).toFixed(4)
-                  )}
-                  {saleData.reserve.symbol}</span
-                >
-              </div>
-            {/if}
+                {saleData.reserve.symbol}</span
+              >
+              <span
+                >Fee: {Number(
+                  (+formatUnits(result.fee, saleData.reserve.decimals)).toFixed(
+                    4
+                  )
+                )}
+                <!-- {saleData.reserve.symbol} -->
+              </span>
+              <span
+                >Total: {Number(
+                  (+formatUnits(
+                    result.total,
+                    saleData.reserve.decimals
+                  )).toFixed(4)
+                )}
+                {saleData.reserve.symbol}</span
+              >
+            </div>
           {/await}
         </div>
       {/if}
-      <Modal
-        show={$modal2}
-        styleContent={{ color: "rgba(249, 250, 251, 1)" }}
-        styleWindow={{
-          backgroundColor: "rgba(17, 24, 39, 1) !important",
-          width: "fit-content",
-        }}
-        closeButton={false}
-      >
-        <Button disabled={!priceConfirmed} on:click={showBuyModal}>Buy</Button>
-      </Modal>
+      <Button disabled={!priceConfirmed} on:click={buy}>Buy</Button>
     {/if}
 
     {#if activeStep == BuySteps.Complete}

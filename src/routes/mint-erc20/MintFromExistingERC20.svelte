@@ -1,22 +1,19 @@
 <script lang="ts">
-  import { ethers, providers } from "ethers";
-  import { formatUnits } from "ethers/lib/utils";
+  import { BigNumber, ethers, providers, Signer } from "ethers";
+  import { formatUnits, hexlify } from "ethers/lib/utils";
   import { signer, signerAddress, provider } from "svelte-ethers-store";
   import { push } from "svelte-spa-router";
-  import Button from "../../components/Button.svelte";
-  import FormPanel from "../../components/FormPanel.svelte";
-  import Input from "../../components/Input.svelte";
+  import Button from "$components/Button.svelte";
+  import FormPanel from "$components/FormPanel.svelte";
+  import Input from "$components/Input.svelte";
   import TokenInfo from "../sale/TokenInfo.svelte";
   import { EmissionsERC20 } from "rain-sdk";
+  import { getERC20 } from "$src/utils";
   import { tierReport } from "../../utils";
-  import { getERC20 } from "src/utils";
   import { queryStore } from "@urql/svelte";
-  import { client } from "src/stores";
-  import { selectedNetwork } from "src/stores";
-  import { getContext } from "svelte";
-  import SimpleTransactionModal from "src/components/SimpleTransactionModal.svelte";
-
-  const { open } = getContext("simple-modal");
+  import { client } from "$src/stores";
+  import { selectedNetwork } from "$src/stores";
+  import { addressValidate } from "$src/validation";
 
   export let params: {
     wild: string;
@@ -31,12 +28,8 @@
     calcClaimPromise,
     claimPromise,
     emissionAddress;
-  let currentBlockNumber,
-    claimedBlockNumber,
-    parsedReport,
-    claimableBlockNumber;
+  let currentTimestamp, claimedTimestamp, parsedReport, claimableTimestamp;
   let claimantAddress = $signerAddress;
-  let claimed = false;
 
   $: if (params.wild || $signer) {
     initPromise = initContract();
@@ -68,7 +61,6 @@
               id
               sources
               constants
-              stack
             }
           }
         }`,
@@ -82,24 +74,30 @@
       : undefined;
 
   const faucetData = async () => {
-    currentBlockNumber = await $signer.provider.getBlockNumber();
-    claimedBlockNumber = parsedReport[0];
+    currentTimestamp = Math.floor(Date.now() / 1000);
+    claimedTimestamp = parsedReport[0];
 
     isFaucet =
       emission?.calculateClaimStateConfig.sources[0] ===
-      "0x01002e001d0001010102050008002e0022000104160213021f00240001031c001c00";
+      "0x0000020019000001000211001000020029000004220220021b000005000318001800";
 
-    claimableBlockNumber =
-      parseInt(claimedBlockNumber) +
-      parseInt(emission.calculateClaimStateConfig.constants[2]);
+    claimableTimestamp =
+      claimedTimestamp +
+      Number(emission?.calculateClaimStateConfig.constants[2]);
   };
+
+  $: if (emission) {
+    faucetData();
+  }
 
   const initContract = async () => {
     if (ethers.utils.isAddress(params.wild || "")) {
       erc20Contract = new EmissionsERC20(params.wild, $signer);
       token = await getERC20(params.wild, $signer, $signerAddress);
-      const report = await erc20Contract.report($signerAddress);
-      parsedReport = tierReport(report);
+      const report = await erc20Contract.report($signerAddress, []);
+      console.log(report);
+      parsedReport = tierReport(report.toHexString());
+      console.log(parsedReport);
       faucetData();
     } else if (params.wild) {
       errorMsg = "Not a valid contract address";
@@ -107,30 +105,37 @@
   };
 
   const calculateClaim = async () => {
-    const claim = await erc20Contract.calculateClaim(claimantAddress);
+    const claim = (await erc20Contract.calculateClaim(
+      claimantAddress
+    )) as BigNumber;
 
-    if (!isFaucet) {
-      showMint = !showMint;
+    if (!claim.isZero()) {
+      showMint = true;
     } else {
-      showClaim = !showClaim;
+      showMint = false;
     }
     return claim;
   };
 
-  let returnValue = (method, receipt) => {};
+  const calculateClaimFaucet = async () => {
+    const claim = (await erc20Contract.calculateClaim(
+      claimantAddress
+    )) as BigNumber;
+
+    if (!claim.isZero()) {
+      showClaim = true;
+    } else {
+      showClaim = false;
+    }
+    return claim;
+  };
 
   const claim = async () => {
-    await open(SimpleTransactionModal, {
-      method: erc20Contract.claim,
-      args: [claimantAddress, ethers.constants.AddressZero],
-      confirmationMsg: "Claim Completed",
-      returnValue,
-    });
-
-    returnValue = (method, receipt) => {
-      claimed = true;
-      return receipt;
-    };
+    const tx = await erc20Contract.claim(
+      claimantAddress,
+      ethers.constants.AddressZero
+    );
+    return await tx.wait();
   };
 </script>
 
@@ -146,6 +151,7 @@
         bind:value={erc20Address}
         type="address"
         placeholder="Contract address"
+        validator={addressValidate}
       >
         <span slot="description">Only the owner of the token can mint</span>
       </Input>
@@ -162,10 +168,10 @@
   {/if}
 
   {#if initPromise}
-    {#await initPromise}
+    {#await initPromise && emission}
       Loading...
     {:then}
-      {#if token}
+      {#if token && emission}
         <FormPanel heading="ERC20 Token Details">
           <TokenInfo
             tokenData={{
@@ -178,54 +184,55 @@
           />
         </FormPanel>
 
-        <FormPanel heading="Mint">
-          {#if !showMint}
-            <div class="flex flex-col gap-y-4">
-              <span class="text-gray-400"
-                >Show mintable amount for {$signerAddress}</span
-              >
-              <Button
-                on:click={() => {
-                  calcMintPromise = calculateClaim();
-                }}
-                disabled={isFaucet}
-              >
-                Show
-              </Button>
-            </div>
-          {/if}
-          {#if calcMintPromise}
-            <div>
-              {#await calcMintPromise}
-                Getting eligible mint...
-              {:then claim}
-                Mintable amount will be {formatUnits(
-                  claim,
-                  token.erc20decimals
-                )}
-                {token.erc20symbol}
-              {:catch err}
-                <span class="text-lg text-red-400">{err.error.message}</span>
-              {/await}
-            </div>
-          {/if}
-
-          {#if showMint}
-            <Button
-              shrink
-              on:click={() => {
-                mintPromise = claim();
-              }}>Mint</Button
-            >
-            {#if mintPromise}
-              {#await mintPromise}
-                Minting...
-              {:then}
-                Mint complete! Refresh to see your new balance.
-              {/await}
+        {#if BigInt(emission?.calculateClaimStateConfig?.constants[0]) == BigInt($signerAddress)}
+          <FormPanel heading="Mint">
+            {#if !showMint}
+              <div class="flex flex-col gap-y-4">
+                <span class="text-gray-400"
+                  >Show mintable amount for {$signerAddress}</span
+                >
+                <Button
+                  on:click={() => {
+                    calcMintPromise = calculateClaim();
+                  }}
+                >
+                  Show
+                </Button>
+              </div>
             {/if}
-          {/if}
-        </FormPanel>
+            {#if calcMintPromise}
+              <div>
+                {#await calcMintPromise}
+                  Getting eligible mint...
+                {:then claim}
+                  Mintable amount will be {formatUnits(
+                    claim,
+                    token.erc20decimals
+                  )}
+                  {token.erc20symbol}
+                {:catch err}
+                  <span class="text-lg text-red-400">{err.error.message}</span>
+                {/await}
+              </div>
+            {/if}
+
+            {#if showMint}
+              <Button
+                shrink
+                on:click={() => {
+                  mintPromise = claim();
+                }}>Mint</Button
+              >
+              {#if mintPromise}
+                {#await mintPromise}
+                  Minting...
+                {:then}
+                  Mint complete! Refresh to see your new balance.
+                {/await}
+              {/if}
+            {/if}
+          </FormPanel>
+        {/if}
 
         {#if isFaucet}
           <FormPanel heading="Claim your Faucet">
@@ -234,12 +241,13 @@
                 type="address"
                 placeholder="Name"
                 bind:value={claimantAddress}
+                validator={addressValidate}
               >
                 <span slot="label">Claimant Address</span>
               </Input>
               <Button
                 on:click={() => {
-                  calcClaimPromise = calculateClaim();
+                  calcClaimPromise = calculateClaimFaucet();
                 }}
               >
                 Show
@@ -247,21 +255,21 @@
             {/if}
 
             {#if calcClaimPromise}
-              {#if claimableBlockNumber >= parseInt(currentBlockNumber)}
+              {#if claimableTimestamp >= currentTimestamp}
                 <span class="text-red-400"
                   >You will not be able to make another claim until block
                   <a
                     class="text-blue-400 underline"
                     target="_blank"
-                    href={`${$selectedNetwork.blockExplorer}/block/${claimableBlockNumber}`}
+                    href={`${$selectedNetwork.blockExplorer}/block/${claimableTimestamp}`}
                   >
-                    {claimableBlockNumber}
+                    {claimableTimestamp}
                   </a>.
                 </span>
                 <span class="text-red-400">
-                  You have to wait till
+                  You have to wait
                   <span class="text-white"
-                    >{claimableBlockNumber - currentBlockNumber}</span
+                    >{claimableTimestamp - currentTimestamp}</span
                   > blocks</span
                 >
               {:else}
@@ -282,7 +290,7 @@
               {/if}
             {/if}
 
-            {#if showClaim && !(claimableBlockNumber >= parseInt(currentBlockNumber))}
+            {#if showClaim && claimableTimestamp <= currentTimestamp}
               <Button
                 shrink
                 on:click={() => {
@@ -292,10 +300,9 @@
               {#if claimPromise}
                 {#await claimPromise}
                   Minting...
+                {:then}
+                  Mint complete! Refresh to see your new balance.
                 {/await}
-                {#if claimed}
-                  Claim complete! Refresh to see your new balance.
-                {/if}
               {/if}
             {/if}
           </FormPanel>
